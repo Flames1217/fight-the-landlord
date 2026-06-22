@@ -17,6 +17,7 @@ export const MsgType = {
   GetOnlineCount: 'get_online_count',
   GetMaintenanceStatus: 'get_maintenance_status',
   Chat: 'chat',
+  SetName: 'set_name',
   Connected: 'connected',
   Reconnected: 'reconnected',
   Pong: 'pong',

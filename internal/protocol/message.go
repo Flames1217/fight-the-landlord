@@ -38,6 +38,7 @@ const (
 	MsgGetOnlineCount       MessageType = "get_online_count"       // 获取在线人数
 	MsgGetMaintenanceStatus MessageType = "get_maintenance_status" // 获取维护状态
 	MsgChat                 MessageType = "chat"                   // 聊天消息
+	MsgSetName              MessageType = "set_name"               // 修改昵称
 )
 
 // 服务端 → 客户端 消息类型

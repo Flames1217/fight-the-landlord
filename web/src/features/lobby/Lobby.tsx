@@ -250,7 +250,7 @@ function NicknamePanel({ socket, currentName }: LobbyProps & { currentName: stri
 
   const helperText = useMemo(() => {
     if (savedText) return savedText;
-    return connected ? '保存后会用新名字重新连接' : '连接后会使用这个名字';
+    return connected ? '保存后立即生效' : '连接后会使用这个名字';
   }, [connected, savedText]);
 
   function saveName() {
@@ -261,11 +261,10 @@ function NicknamePanel({ socket, currentName }: LobbyProps & { currentName: stri
     }
     localStorage.setItem(PLAYER_NAME_STORAGE_KEY, nextName);
     setNameInput(nextName);
-    setSavedText('已保存，正在切换身份...');
+    setSavedText('已保存');
+    useAppStore.setState({ playerName: nextName });
     if (connected) {
-      socket.reconnectFresh();
-    } else {
-      useAppStore.setState({ playerName: nextName });
+      socket.send(MsgType.SetName, { name: nextName });
     }
   }
 

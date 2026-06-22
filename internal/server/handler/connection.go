@@ -2,7 +2,9 @@ package handler
 
 import (
 	"log"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/palemoky/fight-the-landlord/internal/protocol"
 	"github.com/palemoky/fight-the-landlord/internal/protocol/codec"
@@ -21,6 +23,27 @@ func (h *Handler) handlePing(client types.ClientInterface, msg *protocol.Message
 	client.SendMessage(codec.MustNewMessage(protocol.MsgPong, protocol.PongPayload{
 		ClientTimestamp: payload.Timestamp,
 		ServerTimestamp: time.Now().UnixMilli(),
+	}))
+}
+
+// handleSetName 处理昵称修改
+func (h *Handler) handleSetName(client types.ClientInterface, msg *protocol.Message) {
+	payload, err := codec.ParsePayload[protocol.SetNamePayload](msg)
+	if err != nil {
+		client.SendMessage(codec.NewErrorMessage(protocol.ErrCodeInvalidMsg))
+		return
+	}
+
+	name := normalizeNickname(payload.Name)
+	if name == "" {
+		client.SendMessage(codec.NewErrorMessageWithText(protocol.ErrCodeInvalidMsg, "昵称不能为空"))
+		return
+	}
+
+	client.SetName(name)
+	h.sessionManager.SetName(client.GetID(), name)
+	client.SendMessage(codec.MustNewMessage(protocol.MsgOnlineCount, protocol.OnlineCountPayload{
+		Count: h.server.GetOnlineCount(),
 	}))
 }
 
@@ -78,6 +101,26 @@ func (h *Handler) handleReconnect(client types.ClientInterface, msg *protocol.Me
 	}
 
 	log.Printf("🔄 玩家 %s (%s) 重连成功", session.PlayerName, session.PlayerID)
+}
+
+func normalizeNickname(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	runes := make([]rune, 0, len([]rune(name)))
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			continue
+		}
+		runes = append(runes, r)
+	}
+	if len(runes) > 16 {
+		runes = runes[:16]
+	}
+
+	return strings.TrimSpace(string(runes))
 }
 
 // tryRestoreRoomState 尝试恢复房间状态

@@ -48,4 +48,10 @@ describe('protocol codec', () => {
       time: 1
     });
   });
+
+  it('round trips set name payloads as JSON for the Go fallback', () => {
+    const decoded = decodeMessage(encodeMessage(MsgType.SetName, { name: 'Flamez' }));
+    expect(decoded.type).toBe(MsgType.SetName);
+    expect(decoded.payload).toEqual({ name: 'Flamez' });
+  });
 });

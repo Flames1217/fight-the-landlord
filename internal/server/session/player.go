@@ -115,6 +115,19 @@ func (sm *SessionManager) SetOnline(playerID string) {
 	}
 }
 
+// SetName 修改玩家昵称
+func (sm *SessionManager) SetName(playerID, playerName string) {
+	sm.mu.RLock()
+	session, ok := sm.sessions[playerID]
+	sm.mu.RUnlock()
+
+	if ok {
+		session.mu.Lock()
+		session.PlayerName = playerName
+		session.mu.Unlock()
+	}
+}
+
 // SetRoom 设置玩家所在房间
 func (sm *SessionManager) SetRoom(playerID, roomCode string) {
 	sm.mu.RLock()

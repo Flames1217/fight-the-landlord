@@ -87,6 +87,9 @@ func (b *BotClient) SetSession(s SessionInterface) {
 
 func (b *BotClient) GetID() string   { return b.id }
 func (b *BotClient) GetName() string { return b.name }
+func (b *BotClient) SetName(name string) {
+	b.name = name
+}
 
 func (b *BotClient) GetRoom() string {
 	b.roomMu.RLock()

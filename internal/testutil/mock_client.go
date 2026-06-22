@@ -23,6 +23,10 @@ func (m *MockClient) GetName() string {
 	return args.String(0)
 }
 
+func (m *MockClient) SetName(name string) {
+	m.Called(name)
+}
+
 func (m *MockClient) GetRoom() string {
 	args := m.Called()
 	return args.String(0)
@@ -61,6 +65,7 @@ func NewSimpleClient(id, name string) *SimpleClient {
 
 func (m *SimpleClient) GetID() string                     { return m.ID }
 func (m *SimpleClient) GetName() string                   { return m.Name }
+func (m *SimpleClient) SetName(name string)               { m.Name = name }
 func (m *SimpleClient) GetRoom() string                   { return m.RoomCode }
 func (m *SimpleClient) SetRoom(code string)               { m.RoomCode = code }
 func (m *SimpleClient) SendMessage(msg *protocol.Message) { m.Messages = append(m.Messages, msg) }

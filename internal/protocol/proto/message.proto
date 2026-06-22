@@ -29,6 +29,7 @@ enum MessageType {
   MSG_GET_ONLINE_COUNT = 15;
   MSG_GET_MAINTENANCE_STATUS = 17;
   MSG_CHAT = 16;
+  MSG_SET_NAME = 18;
 
   // 服务端 -> 客户端
   MSG_CONNECTED = 100;

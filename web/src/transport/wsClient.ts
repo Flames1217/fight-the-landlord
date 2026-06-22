@@ -70,19 +70,6 @@ export class GameSocket {
     useAppStore.getState().setConnected(false);
   }
 
-  reconnectFresh(): void {
-    this.close();
-    useAppStore.setState({
-      phase: 'connecting',
-      playerId: '',
-      playerName: '',
-      reconnectToken: '',
-      roomCode: '',
-      players: []
-    });
-    window.setTimeout(() => this.connect(), 50);
-  }
-
   send(type: MessageType | string, payload?: OutgoingPayload): void {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(encodeMessage(type, payload));

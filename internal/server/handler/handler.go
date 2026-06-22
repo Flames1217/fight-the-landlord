@@ -100,6 +100,7 @@ func (h *Handler) initHandlers() {
 		protocol.MsgGetOnlineCount:       func(c types.ClientInterface, _ *protocol.Message) { h.handleGetOnlineCount(c) },
 		protocol.MsgGetMaintenanceStatus: func(c types.ClientInterface, _ *protocol.Message) { h.handleGetMaintenanceStatus(c) },
 		protocol.MsgChat:                 h.handleChat,
+		protocol.MsgSetName:              h.handleSetName,
 	}
 }
 

@@ -250,6 +250,15 @@ func (c *Client) GetRoom() string {
 }
 
 // Interface implementations for types.ClientInterface
-func (c *Client) GetID() string   { return c.ID }
-func (c *Client) GetName() string { return c.Name }
-func (c *Client) IsBot() bool     { return false }
+func (c *Client) GetID() string { return c.ID }
+func (c *Client) GetName() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Name
+}
+func (c *Client) SetName(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Name = name
+}
+func (c *Client) IsBot() bool { return false }

@@ -18,6 +18,7 @@ type ServerInterface interface {
 type ClientInterface interface {
 	GetID() string
 	GetName() string
+	SetName(name string)
 	GetRoom() string
 	SetRoom(code string)
 	SendMessage(msg *protocol.Message)

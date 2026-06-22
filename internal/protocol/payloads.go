@@ -35,6 +35,11 @@ type GetLeaderboardPayload struct {
 	Limit  int    `json:"limit"`  // 数量
 }
 
+// SetNamePayload 修改昵称请求
+type SetNamePayload struct {
+	Name string `json:"name"`
+}
+
 // --- 服务端响应 Payloads ---
 
 // ConnectedPayload 连接成功响应
