@@ -1,79 +1,127 @@
-import { MsgType } from '../../protocol/types';
+import { MsgType, type LobbyPanel } from '../../protocol/types';
 import type { GameSocket } from '../../transport/wsClient';
 import { useAppStore, useChatStore } from '../../stores/appStore';
-import { Icon } from '../../shared/ui/Icon';
 
 interface LobbyProps {
   socket: GameSocket;
 }
 
+const MENU_ITEMS: Array<{ key: LobbyPanel | 'rules'; label: string }> = [
+  { key: 'home', label: '1. 快速匹配' },
+  { key: 'home', label: '2. 创建房间' },
+  { key: 'home', label: '3. 加入房间' },
+  { key: 'leaderboard', label: '4. 排行榜' },
+  { key: 'stats', label: '5. 我的战绩' },
+  { key: 'rules', label: '6. 游戏规则' }
+];
+
 export function Lobby({ socket }: LobbyProps) {
   const phase = useAppStore((state) => state.phase);
-  const panel = useAppStore((state) => state.lobbyPanel);
   const roomCode = useAppStore((state) => state.roomCode);
   const players = useAppStore((state) => state.players);
+
+  if (phase === 'matching') return <MatchingPanel />;
+  if (phase === 'waiting') return <RoomWaiting socket={socket} roomCode={roomCode} players={players} />;
+
+  return <LobbyTerminal socket={socket} />;
+}
+
+function LobbyTerminal({ socket }: LobbyProps) {
+  const panel = useAppStore((state) => state.lobbyPanel);
   const onlineCount = useAppStore((state) => state.onlineCount);
   const playerName = useAppStore((state) => state.playerName);
   const setLobbyPanel = useAppStore((state) => state.setLobbyPanel);
 
+  function choose(item: LobbyPanel | 'rules', index: number) {
+    if (index === 0) {
+      useAppStore.setState({ phase: 'matching' });
+      socket.send(MsgType.QuickMatch);
+      return;
+    }
+    if (index === 1) {
+      socket.send(MsgType.CreateRoom);
+      return;
+    }
+    if (index === 2) {
+      setLobbyPanel('home');
+      return;
+    }
+    if (item === 'leaderboard') {
+      setLobbyPanel('leaderboard');
+      socket.send(MsgType.GetLeaderboard, { type: 'total', offset: 0, limit: 30 });
+      return;
+    }
+    if (item === 'stats') {
+      setLobbyPanel('stats');
+      socket.send(MsgType.GetStats);
+      return;
+    }
+    if (item === 'rules') {
+      setLobbyPanel('chat');
+      return;
+    }
+  }
+
   return (
-    <main className="lobby-screen terminal-screen">
-      <header className="terminal-header lobby-terminal-header">
-        <div className="terminal-title-block">
-          <div className="terminal-title-mark" aria-hidden="true">[]</div>
-          <div>
-            <p className="terminal-kicker">ddz lobby / web terminal</p>
-            <h1>斗地主大厅</h1>
-            <p className="terminal-subtitle">
-              {playerName ? `${playerName}，欢迎回来` : '浏览器版终端大厅'}
-            </p>
-          </div>
-        </div>
-        <div className="terminal-chip-row">
-          <span className="terminal-chip">在线 {onlineCount || 0}</span>
-          <span className="terminal-chip terminal-chip--accent">{phaseLabel(phase)}</span>
-        </div>
-      </header>
+    <main className="lobby-screen terminal-screen lobby-terminal-screen">
+      <section className="lobby-shell">
+        <header className="lobby-terminal-intro">
+          <p className="lobby-terminal-brand">🎮 欢乐斗地主</p>
+          <h1>欢迎，{playerName || '玩家'}！</h1>
+          <p className="lobby-terminal-online">🌐 在线玩家：{onlineCount || 0} 人</p>
+        </header>
 
-      {phase === 'matching' ? <MatchingPanel /> : null}
-      {phase === 'waiting' ? <RoomWaiting socket={socket} roomCode={roomCode} players={players} /> : null}
-      {phase !== 'matching' && phase !== 'waiting' ? (
-        panel === 'home' ? <LobbyHome socket={socket} /> : <LobbySubPanel socket={socket} panel={panel} />
-      ) : null}
+        <section className="lobby-terminal-main">
+          <aside className="lobby-menu-panel">
+            <h2>请选择：</h2>
+            <div className="lobby-menu-list">
+              {MENU_ITEMS.map((item, index) => {
+                const selected = (index <= 2 && panel === 'home') || (item.key !== 'home' && item.key !== 'rules' && panel === item.key);
+                return (
+                  <button
+                    key={`${item.label}_${index}`}
+                    className={`lobby-menu-item ${selected && index === 0 ? 'is-primary' : ''}`}
+                    onClick={() => choose(item.key, index)}
+                  >
+                    <span className="lobby-menu-caret">{selected && index === 0 ? '▶' : ' '}</span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-      <nav className="terminal-tabs bottom-nav" aria-label="大厅导航">
-        <button className={panel === 'home' ? 'is-active' : ''} onClick={() => setLobbyPanel('home')}>大厅</button>
-        <button
-          className={panel === 'leaderboard' ? 'is-active' : ''}
-          onClick={() => {
-            setLobbyPanel('leaderboard');
-            socket.send(MsgType.GetLeaderboard, { type: 'total', offset: 0, limit: 30 });
-          }}
-        >
-          排行榜
-        </button>
-        <button
-          className={panel === 'stats' ? 'is-active' : ''}
-          onClick={() => {
-            setLobbyPanel('stats');
-            socket.send(MsgType.GetStats);
-          }}
-        >
-          战绩
-        </button>
-        <button className={panel === 'chat' ? 'is-active' : ''} onClick={() => setLobbyPanel('chat')}>聊天</button>
-      </nav>
+          <section className="lobby-content-panel">
+            {panel === 'leaderboard' ? <LeaderboardPanel /> : null}
+            {panel === 'stats' ? <StatsPanel /> : null}
+            {panel === 'chat' ? <LobbyChat socket={socket} /> : null}
+            {panel === 'home' ? <LobbyHome socket={socket} /> : null}
+          </section>
+        </section>
+
+        <footer className="lobby-terminal-footer">
+          <p>&gt; ↑↓ 选择 | 回车确认 | 或输入房间号</p>
+          <p className="lobby-terminal-credit">Made with ♥ by Palemoky</p>
+        </footer>
+      </section>
     </main>
   );
 }
 
 function LobbyHome({ socket }: LobbyProps) {
+  const messages = useChatStore((state) => state.messages);
+  const chatInput = useAppStore((state) => state.chatInput);
+  const setChatInput = useAppStore((state) => state.setChatInput);
   const roomCodeInput = useAppStore((state) => state.roomCodeInput);
-  const roomList = useAppStore((state) => state.roomList);
   const setRoomCodeInput = useAppStore((state) => state.setRoomCodeInput);
   const setError = useAppStore((state) => state.setError);
-  const playerName = useAppStore((state) => state.playerName);
-  const onlineCount = useAppStore((state) => state.onlineCount);
+
+  function send() {
+    const content = chatInput.trim();
+    if (!content) return;
+    socket.send(MsgType.Chat, { content, scope: 'lobby' });
+    setChatInput('');
+  }
 
   function joinRoom() {
     const roomCode = roomCodeInput.trim();
@@ -84,205 +132,49 @@ function LobbyHome({ socket }: LobbyProps) {
     socket.send(MsgType.JoinRoom, { room_code: roomCode });
   }
 
-  function refreshRooms() {
-    socket.send(MsgType.GetRoomList);
-  }
-
-  function joinListedRoom(roomCode: string) {
-    setRoomCodeInput(roomCode);
-    socket.send(MsgType.JoinRoom, { room_code: roomCode });
-  }
-
   return (
-    <section className="lobby-home lobby-terminal-layout">
-      <section className="terminal-panel terminal-panel--hero">
-        <div className="hero-ascii" aria-hidden="true">
-          <span>FIGHT THE LANDLORD</span>
-          <span>READY / MATCH / PLAY</span>
-        </div>
-        <div className="terminal-panel__head">
-          <span className="terminal-panel__label">会话状态</span>
-          <span className="terminal-panel__meta">玩家 {playerName || 'Guest'}</span>
-        </div>
-        <div className="terminal-hero-copy">
-          <h2>进入牌桌</h2>
-          <p>保留浏览器联机，把视觉压成终端客户端的干净感。</p>
-        </div>
-        <div className="terminal-stat-grid">
-          <TerminalStat label="在线人数" value={onlineCount || 0} />
-          <TerminalStat label="房间缓存" value={roomList.length} />
-          <TerminalStat label="模式" value="经典三人" />
-        </div>
-        <div className="terminal-command-row">
-          <button
-            className="primary-action"
-            onClick={() => {
-              useAppStore.setState({ phase: 'matching' });
-              socket.send(MsgType.QuickMatch);
-            }}
-          >
-            <Icon name="play" /> 快速开局
-          </button>
-          <button className="secondary-action secondary-action--green" onClick={() => socket.send(MsgType.CreateRoom)}>
-            <Icon name="room" /> 创建房间
-          </button>
-          <button className="secondary-action secondary-action--blue" onClick={() => socket.send(MsgType.PracticeMatch)}>
-            <Icon name="bot" /> 人机练习
-          </button>
-        </div>
-      </section>
-
-      <section className="terminal-panel terminal-panel--sidebar">
-        <div className="terminal-panel__head">
-          <span className="terminal-panel__label">加入房间</span>
-          <span className="terminal-panel__meta">manual connect</span>
-        </div>
-        <div className="join-strip join-strip--terminal">
-          <label htmlFor="room-code">房号</label>
-          <input
-            id="room-code"
-            value={roomCodeInput}
-            onChange={(event) => setRoomCodeInput(event.target.value)}
-            maxLength={8}
-            placeholder="输入房间号"
-          />
-          <button onClick={joinRoom}>加入</button>
-        </div>
-        <div className="terminal-log">
-          <p>&gt; 支持快速匹配、好友房、人机练习</p>
-          <p>&gt; 房号可直接复制给朋友</p>
-          <p>&gt; 现在的目标是复刻终端感，不牺牲可玩性</p>
-        </div>
-      </section>
-
-      <section className="terminal-panel room-browser terminal-panel--wide" aria-label="可加入房间">
-        <div className="room-browser__head terminal-panel__head">
-          <span className="terminal-panel__label">公开房间列表</span>
-          <button className="secondary-action secondary-action--muted" onClick={refreshRooms}>刷新</button>
-        </div>
-        <div className="terminal-room-table">
-          <div className="terminal-room-table__head">
-            <span>房间号</span>
-            <span>人数</span>
-            <span>状态</span>
-          </div>
-          <div className="room-browser__list">
-            {roomList.length ? roomList.map((room) => (
-              <button className="room-browser__row" key={room.room_code} onClick={() => joinListedRoom(room.room_code)}>
-                <span>{room.room_code}</span>
-                <em>{room.player_count}/{room.max_players || 3}</em>
-                <strong>{room.player_count >= (room.max_players || 3) ? '满员' : '可加入'}</strong>
-              </button>
-            )) : <p className="empty-text">暂无可加入房间，点一下刷新试试。</p>}
-          </div>
-        </div>
-      </section>
-    </section>
-  );
-}
-
-function MatchingPanel() {
-  return (
-    <section className="state-panel terminal-panel terminal-state-panel">
-      <span className="spinner spinner--large" />
-      <h2>正在寻找牌友</h2>
-      <p>系统正在为你分配牌桌，通常几秒内就会进入等待房间。</p>
-    </section>
-  );
-}
-
-function RoomWaiting({
-  socket,
-  roomCode,
-  players
-}: LobbyProps & { roomCode: string; players: ReturnType<typeof useAppStore.getState>['players'] }) {
-  const playerId = useAppStore((state) => state.playerId);
-  const me = players.find((player) => player.id === playerId);
-
-  return (
-    <section className="room-waiting terminal-panel">
-      <div className="room-code-panel room-code-panel--terminal">
-        <span>当前房间</span>
-        <strong>{roomCode || '----'}</strong>
-        <p>{players.length}/3 已入座</p>
+    <div className="lobby-chat-room">
+      <div className="lobby-panel-title">💬 聊天室</div>
+      <div className="lobby-chat-feed">
+        {(messages.filter((message) => message.scope !== 'room').slice(-3)).map((message, index) => (
+          <p key={index}>
+            [{clockText(message.time)}] {message.sender_name || '玩家'}：{message.content}
+          </p>
+        ))}
+        {!messages.filter((message) => message.scope !== 'room').length ? (
+          <>
+            <p>[08:37] 系统：欢迎来到大厅</p>
+            <p>[08:37] 系统：左侧可快速匹配、建房、查看战绩</p>
+            <p>[08:37] 系统：输入房间号后可直接加入好友房</p>
+          </>
+        ) : null}
       </div>
-      <div className="seat-list seat-list--terminal">
-        {Array.from({ length: 3 }, (_, index) => {
-          const player = players.find((item) => item.seat === index) ?? players[index];
-          return (
-            <div className={`seat-row ${player?.id === playerId ? 'is-me' : ''}`} key={index}>
-              <span>{index + 1}</span>
-              <strong>{player?.name || '等待加入'}</strong>
-              <em>{player ? (player.ready ? '已准备' : '等待中') : '空位'}</em>
-            </div>
-          );
-        })}
-      </div>
-      <div className="room-actions">
-        <button className="primary-action" onClick={() => socket.send(me?.ready ? MsgType.CancelReady : MsgType.Ready)}>
-          {me?.ready ? '取消准备' : '准备开始'}
-        </button>
-        <button
-          className="secondary-action secondary-action--muted"
-          onClick={() => {
-            socket.send(MsgType.LeaveRoom);
-            useAppStore.getState().leaveLocalRoom();
+      <div className="lobby-inline-entry">
+        <span>&gt;</span>
+        <button className="terminal-inline-button" onClick={joinRoom}>按</button>
+        <input
+          value={roomCodeInput}
+          onChange={(event) => setRoomCodeInput(event.target.value)}
+          maxLength={8}
+          placeholder="输入房间号加入，或直接在下方聊天..."
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') joinRoom();
           }}
-        >
-          离开房间
-        </button>
+        />
       </div>
-    </section>
-  );
-}
-
-function LobbySubPanel({ socket, panel }: LobbyProps & { panel: string }) {
-  if (panel === 'leaderboard') return <LeaderboardPanel />;
-  if (panel === 'stats') return <StatsPanel />;
-  if (panel === 'chat') return <LobbyChat socket={socket} />;
-  return <RulesPanel />;
-}
-
-function LeaderboardPanel() {
-  const entries = useAppStore((state) => state.leaderboard);
-  return (
-    <section className="sub-panel terminal-panel">
-      <div className="terminal-panel__head">
-        <span className="terminal-panel__label">排行榜</span>
-        <span className="terminal-panel__meta">score board</span>
+      <div className="lobby-inline-entry">
+        <span>&gt;</span>
+        <button className="terminal-inline-button" onClick={send}>发</button>
+        <input
+          value={chatInput}
+          onChange={(event) => setChatInput(event.target.value)}
+          placeholder="键入聊天..."
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') send();
+          }}
+        />
       </div>
-      <div className="ranking-list">
-        {entries.length ? entries.map((entry, index) => (
-          <div className="ranking-row" key={`${entry.player_id}_${index}`}>
-            <span>#{entry.rank || index + 1}</span>
-            <strong>{entry.player_name}</strong>
-            <em>{entry.score} 分</em>
-          </div>
-        )) : <p className="empty-text">暂时还没有排行榜数据。</p>}
-      </div>
-    </section>
-  );
-}
-
-function StatsPanel() {
-  const stats = useAppStore((state) => state.stats);
-  return (
-    <section className="sub-panel terminal-panel">
-      <div className="terminal-panel__head">
-        <span className="terminal-panel__label">个人战绩</span>
-        <span className="terminal-panel__meta">player profile</span>
-      </div>
-      {stats ? (
-        <div className="stats-grid">
-          <Stat label="总局数" value={stats.total_games} />
-          <Stat label="胜局" value={stats.wins} />
-          <Stat label="胜率" value={`${stats.win_rate.toFixed(1)}%`} />
-          <Stat label="积分" value={stats.score} />
-          <Stat label="排名" value={`#${stats.rank || '-'}`} />
-          <Stat label="最高连胜" value={stats.max_win_streak} />
-        </div>
-      ) : <p className="empty-text">点一下底部“战绩”后，这里会显示你的统计。</p>}
-    </section>
+    </div>
   );
 }
 
@@ -299,65 +191,124 @@ function LobbyChat({ socket }: LobbyProps) {
   }
 
   return (
-    <section className="sub-panel chat-panel terminal-panel">
-      <div className="terminal-panel__head">
-        <span className="terminal-panel__label">大厅聊天</span>
-        <span className="terminal-panel__meta">global messages</span>
-      </div>
-      <div className="chat-feed">
-        {messages.filter((message) => message.scope !== 'room').slice(-20).map((message, index) => (
-          <p key={index}><strong>{message.sender_name || '玩家'}:</strong> {message.content}</p>
+    <div className="lobby-chat-room">
+      <div className="lobby-panel-title">💬 聊天室</div>
+      <div className="lobby-chat-feed lobby-chat-feed--full">
+        {messages.filter((message) => message.scope !== 'room').slice(-12).map((message, index) => (
+          <p key={index}>
+            [{clockText(message.time)}] {message.sender_name || '玩家'}：{message.content}
+          </p>
         ))}
       </div>
-      <div className="chat-input-row">
+      <div className="lobby-inline-entry">
+        <span>&gt;</span>
+        <button className="terminal-inline-button" onClick={send}>发</button>
         <input
           value={chatInput}
           onChange={(event) => setChatInput(event.target.value)}
-          placeholder="和大厅里的玩家聊两句"
+          placeholder="键聊天..."
           onKeyDown={(event) => {
             if (event.key === 'Enter') send();
           }}
         />
-        <button onClick={send}>发送</button>
       </div>
-    </section>
-  );
-}
-
-function RulesPanel() {
-  return (
-    <section className="sub-panel rules-panel terminal-panel">
-      <div className="terminal-panel__head">
-        <span className="terminal-panel__label">玩法说明</span>
-        <span className="terminal-panel__meta">rules</span>
-      </div>
-      <p>地主独自对抗两名农民，任意一方先出完手牌即可获胜。</p>
-      <p>支持单张、对子、三张、顺子、连对、飞机、炸弹和王炸。</p>
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="stat-tile">
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
 
-function TerminalStat({ label, value }: { label: string; value: string | number }) {
+function LeaderboardPanel() {
+  const entries = useAppStore((state) => state.leaderboard);
   return (
-    <div className="terminal-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className="terminal-info-block">
+      <div className="lobby-panel-title">🏆 排行榜</div>
+      <div className="terminal-list-block">
+        {entries.length ? entries.slice(0, 8).map((entry, index) => (
+          <p key={`${entry.player_id}_${index}`}>
+            #{entry.rank || index + 1} {entry.player_name} · {entry.score} 分
+          </p>
+        )) : <p>暂无排行榜数据</p>}
+      </div>
     </div>
   );
 }
 
-function phaseLabel(phase: string): string {
-  if (phase === 'matching') return '匹配中';
-  if (phase === 'waiting') return '等待房间';
-  if (phase === 'connecting') return '连接中';
-  return '大厅';
+function StatsPanel() {
+  const stats = useAppStore((state) => state.stats);
+  return (
+    <div className="terminal-info-block">
+      <div className="lobby-panel-title">📊 我的战绩</div>
+      <div className="terminal-list-block">
+        {stats ? (
+          <>
+            <p>总局数：{stats.total_games}</p>
+            <p>胜局：{stats.wins}</p>
+            <p>胜率：{stats.win_rate.toFixed(1)}%</p>
+            <p>积分：{stats.score}</p>
+            <p>排名：#{stats.rank || '-'}</p>
+            <p>最高连胜：{stats.max_win_streak}</p>
+          </>
+        ) : <p>点一次“我的战绩”后这里会显示数据。</p>}
+      </div>
+    </div>
+  );
+}
+
+function MatchingPanel() {
+  return (
+    <main className="lobby-screen terminal-screen lobby-terminal-screen">
+      <section className="terminal-wait-panel">
+        <span className="spinner spinner--large" />
+        <h2>正在寻找牌友</h2>
+        <p>系统正在匹配在线玩家，请稍候...</p>
+      </section>
+    </main>
+  );
+}
+
+function RoomWaiting({
+  socket,
+  roomCode,
+  players
+}: LobbyProps & { roomCode: string; players: ReturnType<typeof useAppStore.getState>['players'] }) {
+  const playerId = useAppStore((state) => state.playerId);
+  const me = players.find((player) => player.id === playerId);
+
+  return (
+    <main className="lobby-screen terminal-screen lobby-terminal-screen">
+      <section className="waiting-shell">
+        <div className="waiting-room-code">房间 {roomCode || '----'}</div>
+        <div className="waiting-seat-list">
+          {Array.from({ length: 3 }, (_, index) => {
+            const player = players.find((item) => item.seat === index) ?? players[index];
+            return (
+              <div className={`waiting-seat ${player?.id === playerId ? 'is-me' : ''}`} key={index}>
+                <strong>{player?.name || '等待加入'}</strong>
+                <span>{player ? (player.ready ? '已准备' : '等待中') : '空位'}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="waiting-actions">
+          <button className="terminal-text-button" onClick={() => socket.send(me?.ready ? MsgType.CancelReady : MsgType.Ready)}>
+            {me?.ready ? '取消准备' : '准备开始'}
+          </button>
+          <button
+            className="terminal-text-button"
+            onClick={() => {
+              socket.send(MsgType.LeaveRoom);
+              useAppStore.getState().leaveLocalRoom();
+            }}
+          >
+            离开房间
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function clockText(time?: number): string {
+  if (!time) return '00:00';
+  const date = new Date(time * 1000);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }

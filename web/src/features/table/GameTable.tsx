@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MsgType } from '../../protocol/types';
 import type { GameSocket } from '../../transport/wsClient';
-import { useAppStore, useChatStore, type SeatAction, type TableAction } from '../../stores/appStore';
+import { useAppStore, useChatStore, type TableAction } from '../../stores/appStore';
 import { cardKey, generateSimpleSuggestions, summarizeHand } from '../../shared/cards/cardModel';
 import { Card } from '../../shared/cards/Card';
-import { CardBack } from '../../shared/cards/CardBack';
 import { Hand } from '../../shared/cards/Hand';
-import { PlayedCards } from '../../shared/cards/PlayedCards';
-import { Icon } from '../../shared/ui/Icon';
 import type { CardInfo, PlayerInfo, UtilityDrawer } from '../../protocol/types';
 
 interface GameTableProps {
@@ -26,100 +23,45 @@ export function GameTable({ socket }: GameTableProps) {
   const lastPlayed = useAppStore((state) => state.lastPlayed);
   const lastPlayedName = useAppStore((state) => state.lastPlayedName);
   const lastHandType = useAppStore((state) => state.lastHandType);
-  const seatActions = useAppStore((state) => state.seatActions);
-  const multiplier = useAppStore((state) => state.multiplier);
-  const roomCode = useAppStore((state) => state.roomCode);
-  const latency = useAppStore((state) => state.latency);
   const drawer = useAppStore((state) => state.drawer);
   const setDrawer = useAppStore((state) => state.setDrawer);
   const toggleCard = useAppStore((state) => state.toggleCard);
   const setSelection = useAppStore((state) => state.setSelection);
-  const clearSelection = useAppStore((state) => state.clearSelection);
-  const isMyTurn = currentTurn === playerId;
   const seats = useMemo(() => arrangeSeats(players, playerId), [players, playerId]);
+  const isMyTurn = currentTurn === playerId;
 
   return (
-    <main className="table-screen terminal-screen table-terminal-screen">
-      <header className="table-topbar terminal-header">
-        <div className="table-brand">
-          <span className="table-brand__logo">斗地主</span>
-          <div className="table-brand__copy">
-            <strong>room {roomCode || 'practice'}</strong>
-            <span>browser table / terminal skin</span>
+    <main className="table-screen terminal-screen ddz-table-screen">
+      <section className="ddz-table-shell">
+        <header className="ddz-counter-row">
+          <CounterRibbon />
+          <BottomCardBox cards={bottomCards} revealed={bottomCardsRevealed} />
+        </header>
+
+        <section className="ddz-seat-row">
+          <PlayerSeat player={seats.left} highlight={currentTurn === seats.left?.id} />
+          <PlayerSeat player={seats.right} highlight={currentTurn === seats.right?.id} />
+          <PlayedSummary playerName={lastPlayedName} cards={lastPlayed} handType={lastHandType} />
+        </section>
+
+        <section className="ddz-hand-box">
+          <div className="ddz-hand-title">
+            <span>我的手牌 {seats.me?.is_landlord ? '👑' : '🧑‍🌾'}</span>
+            <strong>({hand.length}张)</strong>
           </div>
-        </div>
-        <div className="table-score-strip">
-          <span>底分 3</span>
-          <strong>倍数 x{multiplier || 1}</strong>
-        </div>
-        <div className="table-network">
-          <span className="network-dot" />
-          <span>{latency ? `${latency}ms` : '在线'}</span>
-        </div>
-        <div className="table-tools">
-          <ToolButton drawer="counter" label="记牌器" icon="counter" />
-          <ToolButton drawer="chat" label="聊天" icon="chat" />
-          <ToolButton drawer="history" label="历史" icon="history" />
-        </div>
-      </header>
-
-      <section className="table-terminal-frame">
-        <aside className="table-side-column">
-          <SeatPanel
-            player={seats.left}
-            side="left"
-            active={currentTurn === seats.left?.id}
-            action={seats.left ? seatActions[seats.left.id] : undefined}
-          />
-        </aside>
-
-        <section className="table-arena">
-          <div className="table-arena__topline">
-            <BottomCards cards={bottomCards} revealed={bottomCardsRevealed} />
-            <StatusRibbon />
-          </div>
-
-          <div className="table-center-console">
-            <div className="table-center-hint">{phase === 'bidding' ? '叫抢地主阶段' : '出牌阶段'}</div>
-            <PlayedCards cards={lastPlayed} handType={lastHandType} playerName={lastPlayedName || '上一手'} />
-            <TurnBanner />
-          </div>
-
-          <div className="self-action-lane">
-            {seats.me ? <PlayedActionBubble action={seatActions[seats.me.id]} self /> : null}
+          <div className="ddz-hand-wrap">
+            <Hand
+              cards={hand}
+              selected={selectedCards}
+              disabled={phase !== 'playing'}
+              onToggle={toggleCard}
+              onRangeSelect={setSelection}
+            />
           </div>
         </section>
 
-        <aside className="table-side-column">
-          <SeatPanel
-            player={seats.right}
-            side="right"
-            active={currentTurn === seats.right?.id}
-            action={seats.right ? seatActions[seats.right.id] : undefined}
-          />
-        </aside>
-      </section>
-
-      <ActionBar socket={socket} isMyTurn={isMyTurn} phase={phase} />
-
-      <section className="hand-zone">
-        {seats.me ? <PlayerBadge player={seats.me} active={currentTurn === playerId} me /> : null}
-        <div className="hand-terminal-panel">
-          <div className="hand-terminal-panel__title">
-            <span>你的手牌</span>
-            <strong>{hand.length} 张</strong>
-          </div>
-          <Hand
-            cards={hand}
-            selected={selectedCards}
-            disabled={phase !== 'playing'}
-            onToggle={toggleCard}
-            onRangeSelect={setSelection}
-          />
-        </div>
-        {selectedCards.size ? (
-          <button className="clear-selection" onClick={clearSelection}>重选</button>
-        ) : null}
+        <TurnPrompt />
+        <ActionBar socket={socket} isMyTurn={isMyTurn} phase={phase} />
       </section>
 
       <UtilityDrawer socket={socket} drawer={drawer} onClose={() => setDrawer('none')} />
@@ -127,116 +69,77 @@ export function GameTable({ socket }: GameTableProps) {
   );
 }
 
-function BottomCards({ cards, revealed }: { cards: CardInfo[]; revealed: boolean }) {
+function CounterRibbon() {
+  const counter = useAppStore((state) => state.cardCounter);
+  const order = [17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3];
   return (
-    <div className={`bottom-cards ${revealed ? 'is-revealed' : 'is-hidden'}`} aria-label="底牌">
-      <span>{revealed ? '底牌' : '底牌未揭'}</span>
-      <div>
-        {revealed && cards.length ? cards.map((card, index) => (
-          <Card key={`${card.suit}_${card.rank}_${index}`} card={card} size="mini" />
-        )) : (
-          <>
-            <span className="mini-card-placeholder" />
-            <span className="mini-card-placeholder" />
-            <span className="mini-card-placeholder" />
-          </>
-        )}
+    <div className="ddz-counter-box">
+      <div className="ddz-counter-line">
+        {order.map((rank) => <span key={rank}>{rankLabel(rank)}</span>)}
+      </div>
+      <div className="ddz-counter-line ddz-counter-line--values">
+        {order.map((rank) => <span key={rank}>{counter[rank] ?? 0}</span>)}
       </div>
     </div>
   );
 }
 
-function ToolButton({ drawer, label, icon }: { drawer: UtilityDrawer; label: string; icon: 'chat' | 'counter' | 'history' | 'rules' }) {
-  const setDrawer = useAppStore((state) => state.setDrawer);
+function BottomCardBox({ cards, revealed }: { cards: CardInfo[]; revealed: boolean }) {
   return (
-    <button className="tool-button" onClick={() => setDrawer(drawer)} title={label} aria-label={label}>
-      <Icon name={icon} />
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function SeatPanel({
-  player,
-  side,
-  active,
-  action
-}: {
-  player?: PlayerInfo;
-  side: 'left' | 'right';
-  active: boolean;
-  action?: SeatAction;
-}) {
-  if (!player) {
-    return <aside className={`seat-panel seat-panel--${side}`} aria-hidden="true" />;
-  }
-
-  return (
-    <aside className={`seat-panel seat-panel--${side} ${active ? 'is-active' : ''}`}>
-      <PlayerBadge player={player} active={active} />
-      <div className="seat-panel__cards">
-        <CardBack count={player.cards_count || 0} />
+    <div className="ddz-bottom-box">
+      <div className="ddz-bottom-title">底牌</div>
+      <div className="ddz-bottom-cards">
+        {(revealed ? cards : Array.from({ length: 3 }, () => null)).slice(0, 3).map((card, index) => (
+          <div key={index} className="ddz-bottom-card">
+            {card ? <Card card={card} size="mini" /> : <span className="ddz-bottom-card__back" />}
+          </div>
+        ))}
       </div>
-      <PlayedActionBubble action={action} side={side} />
-    </aside>
+    </div>
   );
 }
 
-function PlayedActionBubble({
-  action,
-  side,
-  self = false
-}: {
-  action?: SeatAction;
-  side?: 'left' | 'right';
-  self?: boolean;
-}) {
-  if (!action) {
-    return <div className={`played-action played-action--empty ${self ? 'played-action--self' : ''}`} aria-hidden="true" />;
-  }
-
-  const label = action.label || (action.type === 'pass' ? '不出' : action.hand_type || '出牌');
-  const hasCards = action.type === 'play' && Boolean(action.cards?.length);
+function PlayerSeat({ player, highlight = false }: { player?: PlayerInfo; highlight?: boolean }) {
+  if (!player) return <div className="ddz-seat-box" />;
 
   return (
-    <div className={`played-action played-action--${action.type} ${side ? `played-action--${side}` : ''} ${self ? 'played-action--self' : ''}`}>
-      {hasCards ? (
-        <div className="played-action__cards" aria-label={label}>
-          {action.cards?.map((card, index) => (
-            <Card key={`${card.suit}_${card.rank}_${index}`} card={card} size="action" />
-          ))}
-        </div>
+    <div className={`ddz-seat-box ${highlight ? 'is-active' : ''}`}>
+      <div className="ddz-seat-name">
+        <span>{player.is_landlord ? '👑' : '🧑‍🌾'}</span>
+        <strong>{player.name}</strong>
+      </div>
+      <div className="ddz-seat-count">{player.cards_count || 0}张</div>
+    </div>
+  );
+}
+
+function PlayedSummary({ playerName, cards, handType }: { playerName: string; cards: CardInfo[]; handType: string }) {
+  return (
+    <div className="ddz-played-box">
+      {cards.length ? (
+        <>
+          <div className="ddz-played-title">{playerName || '上一手'}：{handType || '出牌'}</div>
+          <div className="ddz-played-cards">
+            {cards.map((card, index) => (
+              <Card key={`${card.suit}_${card.rank}_${index}`} card={card} size="action" />
+            ))}
+          </div>
+        </>
       ) : (
-        <strong>{label}</strong>
+        <div className="ddz-played-placeholder">等待首家出牌</div>
       )}
-      {hasCards && action.hand_type ? <span>{action.hand_type}</span> : null}
     </div>
   );
 }
 
-function PlayerBadge({ player, active, me = false }: { player: PlayerInfo; active: boolean; me?: boolean }) {
-  return (
-    <div className={`player-badge ${active ? 'is-active' : ''} ${me ? 'is-me' : ''}`}>
-      <span className="player-avatar" aria-hidden="true">{player.name.slice(0, 1)}</span>
-      <div className="player-badge__copy">
-        <strong>{player.name}{me ? '（你）' : ''}</strong>
-        <span>{player.is_landlord ? '地主' : '农民'} / 剩余 {player.cards_count || 0}</span>
-      </div>
-      {player.is_landlord ? <em>地主</em> : null}
-      {!player.online ? <em>离线</em> : null}
-    </div>
-  );
-}
-
-function TurnBanner() {
+function TurnPrompt() {
   const playerId = useAppStore((state) => state.playerId);
   const players = useAppStore((state) => state.players);
   const currentTurn = useAppStore((state) => state.currentTurn);
   const timeout = useAppStore((state) => state.timeout);
   const timerStart = useAppStore((state) => state.timerStart);
-  const phase = useAppStore((state) => state.phase);
-  const isGrabTurn = useAppStore((state) => state.isGrabTurn);
-  const recentActions = useAppStore((state) => state.recentActions);
+  const multiplier = useAppStore((state) => state.multiplier);
+  const tableMessage = useAppStore((state) => state.tableMessage);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -246,34 +149,17 @@ function TurnBanner() {
 
   const remaining = timeout ? Math.max(0, Math.ceil(timeout - (now - timerStart) / 1000)) : 0;
   const actor = players.find((player) => player.id === currentTurn);
-  const isMe = currentTurn === playerId;
-  const lastBid = [...recentActions].reverse().find((action) => action.type === 'bid');
-  const title = isMe ? '轮到你' : `等待 ${actor?.name || '玩家'}`;
-  const subtitle = phase === 'bidding'
-    ? (isGrabTurn ? '抢地主阶段' : '叫地主阶段')
-    : (lastBid?.label ? `${lastBid.player_name || '玩家'}：${lastBid.label}` : '观察其他玩家出牌');
+  const isMine = currentTurn === playerId;
 
   return (
-    <div className={`turn-banner ${isMe ? 'is-mine' : ''}`}>
-      <div className="turn-banner__copy">
-        <strong>{title}</strong>
-        <span>{subtitle}</span>
-      </div>
-      <time>{remaining || 0}</time>
-    </div>
-  );
-}
-
-function StatusRibbon() {
-  const multiplier = useAppStore((state) => state.multiplier);
-  const players = useAppStore((state) => state.players);
-  const landlord = players.find((player) => player.is_landlord);
-
-  return (
-    <div className="status-ribbon">
-      <span>地主 {landlord?.name || '待定'}</span>
-      <span>倍率 x{multiplier || 1}</span>
-    </div>
+    <section className="ddz-prompt-box">
+      <p className="ddz-prompt-main">
+        ⏳ {String(remaining).padStart(2, '0')}秒 | {isMine ? '轮到你出牌！' : `等待 ${actor?.name || '玩家'} 出牌...`} | 💥×{multiplier || 1}
+      </p>
+      <p className="ddz-prompt-sub">
+        &gt; {tableMessage || 'C 键记牌器，T 键聊天，H 键历史'}
+      </p>
+    </section>
   );
 }
 
@@ -286,8 +172,8 @@ function ActionBar({ socket, isMyTurn, phase }: GameTableProps & { isMyTurn: boo
   const isGrabTurn = useAppStore((state) => state.isGrabTurn);
   const setSelection = useAppStore((state) => state.setSelection);
   const clearSelection = useAppStore((state) => state.clearSelection);
+  const setDrawer = useAppStore((state) => state.setDrawer);
   const selected = hand.filter((card) => selectedCards.has(cardKey(card)));
-  const summary = summarizeHand(selected);
   const canPlay = isMyTurn && phase === 'playing' && selected.length > 0 && (mustPlay || canBeat);
 
   function play() {
@@ -301,7 +187,7 @@ function ActionBar({ socket, isMyTurn, phase }: GameTableProps & { isMyTurn: boo
 
   function pass() {
     if (mustPlay) {
-      useAppStore.setState({ tableMessage: '本轮必须出牌' });
+      useAppStore.setState({ tableMessage: '没有能大过上家的牌，不能 PASS' });
       return;
     }
     socket.send(MsgType.Pass);
@@ -311,7 +197,7 @@ function ActionBar({ socket, isMyTurn, phase }: GameTableProps & { isMyTurn: boo
   function hint() {
     const suggestions = generateSimpleSuggestions(hand, lastPlayed, mustPlay);
     if (!suggestions.length) {
-      useAppStore.setState({ tableMessage: mustPlay ? '暂无提示' : '没有可压过的牌' });
+      useAppStore.setState({ tableMessage: mustPlay ? '暂无提示' : '没有能大过上家的牌，输入 PASS' });
       return;
     }
     setSelection(suggestions[0].map(cardKey));
@@ -320,38 +206,28 @@ function ActionBar({ socket, isMyTurn, phase }: GameTableProps & { isMyTurn: boo
 
   if (phase === 'bidding') {
     return (
-      <section className="action-bar action-bar--bidding" aria-label="叫地主操作">
-        {isMyTurn ? (
-          <>
-            <button className="primary-action" onClick={() => socket.send(MsgType.Bid, { bid: true })}>
-              {isGrabTurn ? '抢地主' : '叫地主'}
-            </button>
-            <button className="secondary-action secondary-action--muted" onClick={() => socket.send(MsgType.Bid, { bid: false })}>
-              {isGrabTurn ? '不抢' : '不叫'}
-            </button>
-          </>
-        ) : <span>等待其他玩家{isGrabTurn ? '抢地主' : '叫地主'}...</span>}
+      <section className="ddz-command-row">
+        <button className="terminal-command-button" onClick={() => socket.send(MsgType.Bid, { bid: true })}>
+          {isGrabTurn ? '抢地主' : '叫地主'}
+        </button>
+        <button className="terminal-command-button" onClick={() => socket.send(MsgType.Bid, { bid: false })}>
+          {isGrabTurn ? '不抢' : '不叫'}
+        </button>
+        <button className="terminal-command-button" onClick={() => setDrawer('counter')}>记牌器</button>
       </section>
     );
   }
 
   return (
-    <section className="action-bar" aria-label="出牌操作">
-      <button className="secondary-action secondary-action--blue" disabled={!isMyTurn || mustPlay} onClick={pass}>不出</button>
-      <button className="secondary-action secondary-action--green" disabled={!isMyTurn} onClick={hint}>提示</button>
-      <button className="secondary-action secondary-action--muted" disabled={!selectedCards.size} onClick={clearSelection}>重选</button>
-      <button className="primary-action" disabled={!canPlay} onClick={play}>出牌</button>
-      <ActionSummary selectedCount={selected.length} summary={summary} />
+    <section className="ddz-command-row">
+      <button className="terminal-command-button" disabled={!isMyTurn || mustPlay} onClick={pass}>PASS</button>
+      <button className="terminal-command-button" disabled={!isMyTurn} onClick={hint}>提示</button>
+      <button className="terminal-command-button" disabled={!selectedCards.size} onClick={clearSelection}>重选</button>
+      <button className="terminal-command-button is-primary" disabled={!canPlay} onClick={play}>出牌</button>
+      <button className="terminal-command-button" onClick={() => setDrawer('counter')}>记牌器</button>
+      <button className="terminal-command-button" onClick={() => setDrawer('chat')}>聊天</button>
+      <button className="terminal-command-button" onClick={() => setDrawer('history')}>历史</button>
     </section>
-  );
-}
-
-function ActionSummary({ selectedCount, summary }: { selectedCount: number; summary: string }) {
-  const tableMessage = useAppStore((state) => state.tableMessage);
-  return (
-    <small className={tableMessage ? 'is-warning' : ''}>
-      {tableMessage || (selectedCount ? `已选 ${selectedCount} 张 / ${summary}` : '选择手牌后即可操作')}
-    </small>
   );
 }
 
@@ -374,20 +250,20 @@ function UtilityDrawer({ socket, drawer, onClose }: GameTableProps & { drawer: U
     <aside className={`utility-drawer ${open ? 'is-open' : ''}`} aria-hidden={!open}>
       <header>
         <strong>{drawerTitle(drawer)}</strong>
-        <button onClick={onClose} aria-label="关闭"><Icon name="close" /></button>
+        <button onClick={onClose} aria-label="关闭">×</button>
       </header>
       {drawer === 'chat' ? (
         <>
           <div className="chat-feed">
-            {messages.filter((message) => message.scope === 'room').slice(-24).map((message, index) => (
-              <p key={index}><strong>{message.sender_name || '玩家'}:</strong> {message.content}</p>
+            {messages.filter((message) => message.scope === 'room').slice(-18).map((message, index) => (
+              <p key={index}><strong>{message.sender_name || '玩家'}：</strong>{message.content}</p>
             ))}
           </div>
           <div className="chat-input-row">
             <input
               value={chatInput}
               onChange={(event) => setChatInput(event.target.value)}
-              placeholder="房间聊天"
+              placeholder="键入房间聊天..."
               onKeyDown={(event) => {
                 if (event.key === 'Enter') sendChat();
               }}
@@ -396,44 +272,37 @@ function UtilityDrawer({ socket, drawer, onClose }: GameTableProps & { drawer: U
           </div>
         </>
       ) : null}
-      {drawer === 'counter' ? <CounterPanel counter={counter} /> : null}
+      {drawer === 'counter' ? (
+        <div className="terminal-list-block">
+          {Object.entries(counter).map(([rank, count]) => (
+            <p key={rank}>{rankLabel(Number(rank))}：{count}</p>
+          ))}
+        </div>
+      ) : null}
       {drawer === 'history' ? <HistoryPanel actions={actions} /> : null}
       {drawer === 'rules' ? <RulesPanel /> : null}
     </aside>
   );
 }
 
-function CounterPanel({ counter }: { counter: Record<number, number> }) {
-  return (
-    <div className="counter-grid">
-      {Object.entries(counter).map(([rank, count]) => (
-        <div key={rank}>
-          <span>{rankName(Number(rank))}</span>
-          <strong>{count}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function HistoryPanel({ actions }: { actions: TableAction[] }) {
   return (
-    <div className="history-list">
-      {actions.length ? [...actions].reverse().map((action, index) => (
-        <div key={index}>
-          <span>{action.player_name || '系统'}</span>
-          <strong>{action.label || (action.type === 'pass' ? '不出' : action.hand_type || '出牌')}</strong>
-        </div>
-      )) : <p className="empty-text">暂无动作</p>}
+    <div className="terminal-list-block">
+      {actions.length ? [...actions].reverse().slice(0, 12).map((action, index) => (
+        <p key={index}>
+          {action.player_name || '系统'}：{action.label || (action.type === 'pass' ? '不出' : action.hand_type || '出牌')}
+        </p>
+      )) : <p>暂无动作</p>}
     </div>
   );
 }
 
 function RulesPanel() {
   return (
-    <div className="rules-panel">
-      <p>新一轮开始时必须先出牌，跟牌时需要大过上一手。</p>
-      <p>炸弹可以压大多数牌型，王炸最大。</p>
+    <div className="terminal-list-block">
+      <p>地主独自对抗两名农民。</p>
+      <p>炸弹可压大多数牌型，王炸最大。</p>
+      <p>出牌时需大过上一手，或新开一轮。</p>
     </div>
   );
 }
@@ -450,9 +319,9 @@ function drawerTitle(drawer: UtilityDrawer): string {
   return ({ chat: '房间聊天', counter: '记牌器', history: '动作历史', rules: '玩法说明', none: '' } satisfies Record<UtilityDrawer, string>)[drawer];
 }
 
-function rankName(rank: number): string {
-  if (rank === 16) return '小王';
-  if (rank === 17) return '大王';
+function rankLabel(rank: number): string {
+  if (rank === 17) return 'R';
+  if (rank === 16) return 'B';
   if (rank === 15) return '2';
   if (rank === 14) return 'A';
   if (rank === 13) return 'K';
