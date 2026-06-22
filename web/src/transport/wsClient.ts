@@ -10,6 +10,7 @@ export class GameSocket {
   private socket: WebSocket | null = null;
   private heartbeat: number | null = null;
   private reconnectTimer: number | null = null;
+  private reconnectIdentity: { id: string; token: string } | null = null;
   private intentionalClose = false;
   private readonly listeners = new Set<Listener>();
 
@@ -29,6 +30,7 @@ export class GameSocket {
       this.startHeartbeat();
       const saved = loadReconnect();
       if (saved?.id && saved.token) {
+        this.reconnectIdentity = saved;
         this.send(MsgType.Reconnect, { player_id: saved.id, token: saved.token });
       }
       this.send(MsgType.GetOnlineCount);
@@ -39,6 +41,12 @@ export class GameSocket {
       if (this.socket !== socket) return;
       const message = decodeMessage(event.data as ArrayBuffer);
       useAppStore.getState().handleMessage(message);
+      if (message.type === MsgType.Reconnected && this.reconnectIdentity) {
+        const identity = this.reconnectIdentity;
+        localStorage.setItem('ddz_next_reconnect', JSON.stringify(identity));
+        useAppStore.setState({ playerId: identity.id, reconnectToken: identity.token });
+        this.reconnectIdentity = null;
+      }
       for (const listener of this.listeners) listener(message);
     };
 
@@ -64,6 +72,7 @@ export class GameSocket {
     this.stopHeartbeat();
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
     localStorage.removeItem('ddz_next_reconnect');
+    this.reconnectIdentity = null;
     const socket = this.socket;
     this.socket = null;
     socket?.close();

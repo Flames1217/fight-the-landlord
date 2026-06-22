@@ -17,6 +17,7 @@ type ServerInterface interface {
 // ClientInterface 定义客户端接口
 type ClientInterface interface {
 	GetID() string
+	SetID(id string)
 	GetName() string
 	SetName(name string)
 	GetRoom() string

@@ -68,12 +68,15 @@ func (h *Handler) handleReconnect(client types.ClientInterface, msg *protocol.Me
 		return
 	}
 
-	// 注意：由于ClientInterface不允许修改ID/Name，我们需要通过Server层面处理
-	// 这里我们假设client已经是正确的类型，可以进行类型断言
 	oldID := client.GetID()
 
-	// 从旧 ID 注销，用新 ID 注册
+	// 移除本次 WebSocket 握手创建的临时身份，恢复原会话身份。
 	h.server.UnregisterClient(oldID)
+	if oldID != session.PlayerID {
+		h.sessionManager.DeleteSession(oldID)
+	}
+	client.SetID(session.PlayerID)
+	client.SetName(session.PlayerName)
 	h.server.RegisterClient(session.PlayerID, client)
 
 	// 标记会话上线
@@ -130,18 +133,13 @@ func (h *Handler) tryRestoreRoomState(client types.ClientInterface, session *ses
 		return
 	}
 
-	oldClient := h.server.GetClientByID(session.PlayerID)
-	if oldClient == nil {
-		return
-	}
-
-	// 重连到房间
-	if err := h.roomManager.ReconnectPlayer(oldClient, client); err != nil {
+	// 身份已恢复，可直接按原玩家 ID 替换房间中的旧连接。
+	client.SetRoom(session.RoomCode)
+	if err := h.roomManager.ReconnectPlayer(client, client); err != nil {
 		log.Printf("重连到房间失败: %v", err)
 		return
 	}
 
-	client.SetRoom(session.RoomCode)
 	payload.RoomCode = session.RoomCode
 
 	// 如果游戏正在进行，恢复游戏状态

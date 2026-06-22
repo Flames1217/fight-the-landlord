@@ -86,6 +86,7 @@ func (b *BotClient) SetSession(s SessionInterface) {
 // --- types.ClientInterface 实现 ---
 
 func (b *BotClient) GetID() string   { return b.id }
+func (b *BotClient) SetID(id string) { b.id = id }
 func (b *BotClient) GetName() string { return b.name }
 func (b *BotClient) SetName(name string) {
 	b.name = name

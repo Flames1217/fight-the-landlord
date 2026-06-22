@@ -250,7 +250,16 @@ func (c *Client) GetRoom() string {
 }
 
 // Interface implementations for types.ClientInterface
-func (c *Client) GetID() string { return c.ID }
+func (c *Client) GetID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ID
+}
+func (c *Client) SetID(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ID = id
+}
 func (c *Client) GetName() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

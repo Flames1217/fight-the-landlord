@@ -18,6 +18,10 @@ func (m *MockClient) GetID() string {
 	return args.String(0)
 }
 
+func (m *MockClient) SetID(id string) {
+	m.Called(id)
+}
+
 func (m *MockClient) GetName() string {
 	args := m.Called()
 	return args.String(0)
@@ -64,6 +68,7 @@ func NewSimpleClient(id, name string) *SimpleClient {
 }
 
 func (m *SimpleClient) GetID() string                     { return m.ID }
+func (m *SimpleClient) SetID(id string)                   { m.ID = id }
 func (m *SimpleClient) GetName() string                   { return m.Name }
 func (m *SimpleClient) SetName(name string)               { m.Name = name }
 func (m *SimpleClient) GetRoom() string                   { return m.RoomCode }
