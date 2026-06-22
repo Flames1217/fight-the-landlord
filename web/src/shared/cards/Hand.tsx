@@ -161,12 +161,12 @@ export function buildHandLayout(cards: CardInfo[]): HandCardLayout[] {
   const groups = buildGroups(cards);
   const splitAt = Math.ceil(groups.length / 2);
   const rowGroups = [groups.slice(0, splitAt), groups.slice(splitAt)];
-  const singlePositions = buildCenteredPositions(groups, 32, 8);
-  const compactPositions = buildCenteredPositions(groups, 25, 5);
+  const singlePositions = buildCenteredPositions(groups, 50, 10);
+  const compactPositions = buildCenteredPositions(groups, 34, 6);
   const rowPositions = new Map<number, number>();
 
   rowGroups.forEach((row) => {
-    for (const [index, x] of buildCenteredPositions(row, 30, 7)) rowPositions.set(index, x);
+    for (const [index, x] of buildCenteredPositions(row, 42, 8)) rowPositions.set(index, x);
   });
 
   const items: HandCardLayout[] = [];
