@@ -39,11 +39,14 @@ export function GameTable({ socket }: GameTableProps) {
   const seats = useMemo(() => arrangeSeats(players, playerId), [players, playerId]);
 
   return (
-    <main className="table-screen">
-      <header className="table-topbar" aria-label="牌桌状态">
+    <main className="table-screen terminal-screen table-terminal-screen">
+      <header className="table-topbar terminal-header">
         <div className="table-brand">
           <span className="table-brand__logo">斗地主</span>
-          <span>房间号 {roomCode || '练习桌'}</span>
+          <div className="table-brand__copy">
+            <strong>room {roomCode || 'practice'}</strong>
+            <span>browser table / terminal skin</span>
+          </div>
         </div>
         <div className="table-score-strip">
           <span>底分 3</span>
@@ -60,34 +63,60 @@ export function GameTable({ socket }: GameTableProps) {
         </div>
       </header>
 
-      <section className="table-arena" aria-label="斗地主牌桌">
-        <SeatPanel player={seats.left} side="left" active={currentTurn === seats.left?.id} action={seats.left ? seatActions[seats.left.id] : undefined} />
-        <SeatPanel player={seats.right} side="right" active={currentTurn === seats.right?.id} action={seats.right ? seatActions[seats.right.id] : undefined} />
+      <section className="table-terminal-frame">
+        <aside className="table-side-column">
+          <SeatPanel
+            player={seats.left}
+            side="left"
+            active={currentTurn === seats.left?.id}
+            action={seats.left ? seatActions[seats.left.id] : undefined}
+          />
+        </aside>
 
-        <BottomCards cards={bottomCards} revealed={bottomCardsRevealed} />
+        <section className="table-arena">
+          <div className="table-arena__topline">
+            <BottomCards cards={bottomCards} revealed={bottomCardsRevealed} />
+            <StatusRibbon />
+          </div>
 
-        <div className="felt-table">
-          <div className="table-center-hint">{phase === 'bidding' ? '叫抢阶段' : '观察各家出牌'}</div>
-          <PlayedCards cards={lastPlayed} handType={lastHandType} playerName={lastPlayedName || '上一手'} />
-        </div>
+          <div className="table-center-console">
+            <div className="table-center-hint">{phase === 'bidding' ? '叫抢地主阶段' : '出牌阶段'}</div>
+            <PlayedCards cards={lastPlayed} handType={lastHandType} playerName={lastPlayedName || '上一手'} />
+            <TurnBanner />
+          </div>
 
-        <TurnBanner />
+          <div className="self-action-lane">
+            {seats.me ? <PlayedActionBubble action={seatActions[seats.me.id]} self /> : null}
+          </div>
+        </section>
+
+        <aside className="table-side-column">
+          <SeatPanel
+            player={seats.right}
+            side="right"
+            active={currentTurn === seats.right?.id}
+            action={seats.right ? seatActions[seats.right.id] : undefined}
+          />
+        </aside>
       </section>
 
       <ActionBar socket={socket} isMyTurn={isMyTurn} phase={phase} />
 
       <section className="hand-zone">
         {seats.me ? <PlayerBadge player={seats.me} active={currentTurn === playerId} me /> : null}
-        <div className="self-action-lane">
-          {seats.me ? <PlayedActionBubble action={seatActions[seats.me.id]} self /> : null}
+        <div className="hand-terminal-panel">
+          <div className="hand-terminal-panel__title">
+            <span>你的手牌</span>
+            <strong>{hand.length} 张</strong>
+          </div>
+          <Hand
+            cards={hand}
+            selected={selectedCards}
+            disabled={phase !== 'playing'}
+            onToggle={toggleCard}
+            onRangeSelect={setSelection}
+          />
         </div>
-        <Hand
-          cards={hand}
-          selected={selectedCards}
-          disabled={phase !== 'playing'}
-          onToggle={toggleCard}
-          onRangeSelect={setSelection}
-        />
         {selectedCards.size ? (
           <button className="clear-selection" onClick={clearSelection}>重选</button>
         ) : null}
@@ -127,20 +156,41 @@ function ToolButton({ drawer, label, icon }: { drawer: UtilityDrawer; label: str
   );
 }
 
-function SeatPanel({ player, side, active, action }: { player?: PlayerInfo; side: 'left' | 'right'; active: boolean; action?: SeatAction }) {
+function SeatPanel({
+  player,
+  side,
+  active,
+  action
+}: {
+  player?: PlayerInfo;
+  side: 'left' | 'right';
+  active: boolean;
+  action?: SeatAction;
+}) {
   if (!player) {
     return <aside className={`seat-panel seat-panel--${side}`} aria-hidden="true" />;
   }
+
   return (
     <aside className={`seat-panel seat-panel--${side} ${active ? 'is-active' : ''}`}>
       <PlayerBadge player={player} active={active} />
+      <div className="seat-panel__cards">
+        <CardBack count={player.cards_count || 0} />
+      </div>
       <PlayedActionBubble action={action} side={side} />
-      <CardBack count={player.cards_count || 0} />
     </aside>
   );
 }
 
-function PlayedActionBubble({ action, side, self = false }: { action?: SeatAction; side?: 'left' | 'right'; self?: boolean }) {
+function PlayedActionBubble({
+  action,
+  side,
+  self = false
+}: {
+  action?: SeatAction;
+  side?: 'left' | 'right';
+  self?: boolean;
+}) {
   if (!action) {
     return <div className={`played-action played-action--empty ${self ? 'played-action--self' : ''}`} aria-hidden="true" />;
   }
@@ -168,9 +218,9 @@ function PlayerBadge({ player, active, me = false }: { player: PlayerInfo; activ
   return (
     <div className={`player-badge ${active ? 'is-active' : ''} ${me ? 'is-me' : ''}`}>
       <span className="player-avatar" aria-hidden="true">{player.name.slice(0, 1)}</span>
-      <div>
-        <strong>{player.name}{me ? ' 我' : ''}</strong>
-        <span>{player.is_landlord ? '地主' : '农民'} · 剩余 {player.cards_count || 0}</span>
+      <div className="player-badge__copy">
+        <strong>{player.name}{me ? '（你）' : ''}</strong>
+        <span>{player.is_landlord ? '地主' : '农民'} / 剩余 {player.cards_count || 0}</span>
       </div>
       {player.is_landlord ? <em>地主</em> : null}
       {!player.online ? <em>离线</em> : null}
@@ -201,15 +251,28 @@ function TurnBanner() {
   const title = isMe ? '轮到你' : `等待 ${actor?.name || '玩家'}`;
   const subtitle = phase === 'bidding'
     ? (isGrabTurn ? '抢地主阶段' : '叫地主阶段')
-    : '出牌阶段';
+    : (lastBid?.label ? `${lastBid.player_name || '玩家'}：${lastBid.label}` : '观察其他玩家出牌');
 
   return (
     <div className={`turn-banner ${isMe ? 'is-mine' : ''}`}>
       <div className="turn-banner__copy">
         <strong>{title}</strong>
-        <span>{lastBid?.label ? `${lastBid.player_name || '玩家'}：${lastBid.label}` : subtitle}</span>
+        <span>{subtitle}</span>
       </div>
       <time>{remaining || 0}</time>
+    </div>
+  );
+}
+
+function StatusRibbon() {
+  const multiplier = useAppStore((state) => state.multiplier);
+  const players = useAppStore((state) => state.players);
+  const landlord = players.find((player) => player.is_landlord);
+
+  return (
+    <div className="status-ribbon">
+      <span>地主 {landlord?.name || '待定'}</span>
+      <span>倍率 x{multiplier || 1}</span>
     </div>
   );
 }
@@ -260,8 +323,12 @@ function ActionBar({ socket, isMyTurn, phase }: GameTableProps & { isMyTurn: boo
       <section className="action-bar action-bar--bidding" aria-label="叫地主操作">
         {isMyTurn ? (
           <>
-            <button className="primary-action" onClick={() => socket.send(MsgType.Bid, { bid: true })}>{isGrabTurn ? '抢地主' : '叫地主'}</button>
-            <button className="secondary-action secondary-action--muted" onClick={() => socket.send(MsgType.Bid, { bid: false })}>{isGrabTurn ? '不抢' : '不叫'}</button>
+            <button className="primary-action" onClick={() => socket.send(MsgType.Bid, { bid: true })}>
+              {isGrabTurn ? '抢地主' : '叫地主'}
+            </button>
+            <button className="secondary-action secondary-action--muted" onClick={() => socket.send(MsgType.Bid, { bid: false })}>
+              {isGrabTurn ? '不抢' : '不叫'}
+            </button>
           </>
         ) : <span>等待其他玩家{isGrabTurn ? '抢地主' : '叫地主'}...</span>}
       </section>
@@ -283,7 +350,7 @@ function ActionSummary({ selectedCount, summary }: { selectedCount: number; summ
   const tableMessage = useAppStore((state) => state.tableMessage);
   return (
     <small className={tableMessage ? 'is-warning' : ''}>
-      {tableMessage || (selectedCount ? `已选 ${selectedCount} 张 · ${summary}` : '选择手牌后出牌')}
+      {tableMessage || (selectedCount ? `已选 ${selectedCount} 张 / ${summary}` : '选择手牌后即可操作')}
     </small>
   );
 }
@@ -317,7 +384,14 @@ function UtilityDrawer({ socket, drawer, onClose }: GameTableProps & { drawer: U
             ))}
           </div>
           <div className="chat-input-row">
-            <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="房间聊天" onKeyDown={(event) => { if (event.key === 'Enter') sendChat(); }} />
+            <input
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="房间聊天"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') sendChat();
+              }}
+            />
             <button onClick={sendChat}>发送</button>
           </div>
         </>
@@ -358,7 +432,7 @@ function HistoryPanel({ actions }: { actions: TableAction[] }) {
 function RulesPanel() {
   return (
     <div className="rules-panel">
-      <p>新一轮开始必须出牌；跟牌时需要大过上一手。</p>
+      <p>新一轮开始时必须先出牌，跟牌时需要大过上一手。</p>
       <p>炸弹可以压大多数牌型，王炸最大。</p>
     </div>
   );
