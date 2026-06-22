@@ -4,6 +4,8 @@ import { loadReconnect, useAppStore } from '../stores/appStore';
 
 type Listener = (message: IncomingMessage) => void;
 
+export const PLAYER_NAME_STORAGE_KEY = 'ddz_web_player_name';
+
 export class GameSocket {
   private socket: WebSocket | null = null;
   private heartbeat: number | null = null;
@@ -11,15 +13,13 @@ export class GameSocket {
   private intentionalClose = false;
   private readonly listeners = new Set<Listener>();
 
-  constructor(private readonly url: string) {}
-
   connect(): void {
     if (this.socket) return;
     this.intentionalClose = false;
     const store = useAppStore.getState();
     store.setError('');
 
-    const socket = new WebSocket(this.url);
+    const socket = new WebSocket(buildGameSocketUrl());
     this.socket = socket;
     socket.binaryType = 'arraybuffer';
 
@@ -70,6 +70,19 @@ export class GameSocket {
     useAppStore.getState().setConnected(false);
   }
 
+  reconnectFresh(): void {
+    this.close();
+    useAppStore.setState({
+      phase: 'connecting',
+      playerId: '',
+      playerName: '',
+      reconnectToken: '',
+      roomCode: '',
+      players: []
+    });
+    window.setTimeout(() => this.connect(), 50);
+  }
+
   send(type: MessageType | string, payload?: OutgoingPayload): void {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(encodeMessage(type, payload));
@@ -94,6 +107,12 @@ export class GameSocket {
 }
 
 export function createGameSocket(): GameSocket {
-  const url = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-  return new GameSocket(url);
+  return new GameSocket();
+}
+
+function buildGameSocketUrl(): string {
+  const url = new URL(`${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`);
+  const preferredName = localStorage.getItem(PLAYER_NAME_STORAGE_KEY)?.trim();
+  if (preferredName) url.searchParams.set('name', preferredName);
+  return url.toString();
 }

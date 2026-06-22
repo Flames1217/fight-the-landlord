@@ -25,6 +25,15 @@ func TestNewClient(t *testing.T) {
 	assert.NotNil(t, client.send)
 }
 
+func TestNormalizeNickname(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "青竹", NormalizeNickname("  青竹  "))
+	assert.Equal(t, "玩家", NormalizeNickname("玩\x00家"))
+	assert.Equal(t, "abcdefghijklmnop", NormalizeNickname("abcdefghijklmnopq"))
+	assert.Empty(t, NormalizeNickname(" \n\t "))
+}
+
 func TestClient_SetGetRoom_Concurrency(t *testing.T) {
 	t.Parallel()
 

@@ -162,8 +162,19 @@
   font-size: 30px;
 }
 
+.lobby-menu-item.is-selected {
+  color: #f4ea62;
+}
+
+.lobby-menu-item:focus-visible,
+.terminal-inline-button:focus-visible,
+.terminal-text-button:focus-visible {
+  outline: 2px solid #f4ea62;
+  outline-offset: 3px;
+}
+
 .lobby-menu-caret {
-  color: #d7c8ba;
+  color: #f4ea62;
 }
 
 .lobby-content-panel {
@@ -233,6 +244,24 @@
 
 .lobby-inline-entry input::placeholder {
   color: #6e6660;
+}
+
+.nickname-panel {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(215, 200, 186, 0.42);
+}
+
+.nickname-panel p {
+  margin: 0;
+  color: #6e6660;
+  font-size: 20px;
+}
+
+.lobby-inline-entry--name {
+  grid-template-columns: auto auto minmax(0, 1fr);
 }
 
 .lobby-terminal-footer {

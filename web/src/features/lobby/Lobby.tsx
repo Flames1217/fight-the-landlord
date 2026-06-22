@@ -1,18 +1,22 @@
+import { useEffect, useMemo, useState } from 'react';
 import { MsgType, type LobbyPanel } from '../../protocol/types';
-import type { GameSocket } from '../../transport/wsClient';
+import { PLAYER_NAME_STORAGE_KEY, type GameSocket } from '../../transport/wsClient';
 import { useAppStore, useChatStore } from '../../stores/appStore';
 
 interface LobbyProps {
   socket: GameSocket;
 }
 
-const MENU_ITEMS: Array<{ key: LobbyPanel | 'rules'; label: string }> = [
-  { key: 'home', label: '1. 快速匹配' },
-  { key: 'home', label: '2. 创建房间' },
-  { key: 'home', label: '3. 加入房间' },
-  { key: 'leaderboard', label: '4. 排行榜' },
-  { key: 'stats', label: '5. 我的战绩' },
-  { key: 'rules', label: '6. 游戏规则' }
+type MenuAction = 'quick' | 'create' | 'join' | 'practice' | 'leaderboard' | 'stats' | 'rules';
+
+const MENU_ITEMS: Array<{ action: MenuAction; panel: LobbyPanel; label: string }> = [
+  { action: 'quick', panel: 'home', label: '1. 快速匹配' },
+  { action: 'create', panel: 'home', label: '2. 创建房间' },
+  { action: 'join', panel: 'home', label: '3. 加入房间' },
+  { action: 'practice', panel: 'home', label: '4. 人机练习' },
+  { action: 'leaderboard', panel: 'leaderboard', label: '5. 排行榜' },
+  { action: 'stats', panel: 'stats', label: '6. 我的战绩' },
+  { action: 'rules', panel: 'rules', label: '7. 游戏规则' }
 ];
 
 export function Lobby({ socket }: LobbyProps) {
@@ -31,43 +35,94 @@ function LobbyTerminal({ socket }: LobbyProps) {
   const onlineCount = useAppStore((state) => state.onlineCount);
   const playerName = useAppStore((state) => state.playerName);
   const setLobbyPanel = useAppStore((state) => state.setLobbyPanel);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  function choose(item: LobbyPanel | 'rules', index: number) {
-    if (index === 0) {
+  const currentName = playerName || getStoredPlayerName() || '玩家';
+
+  useEffect(() => {
+    const panelIndex = MENU_ITEMS.findIndex((item) => item.panel === panel && item.action !== 'join');
+    if (panelIndex >= 0 && panel !== 'home') setSelectedIndex(panelIndex);
+  }, [panel]);
+
+  function choose(action: MenuAction) {
+    if (action === 'quick') {
       useAppStore.setState({ phase: 'matching' });
       socket.send(MsgType.QuickMatch);
       return;
     }
-    if (index === 1) {
+    if (action === 'create') {
       socket.send(MsgType.CreateRoom);
       return;
     }
-    if (index === 2) {
+    if (action === 'join') {
       setLobbyPanel('home');
+      window.setTimeout(() => document.querySelector<HTMLInputElement>('[data-room-code-input="true"]')?.focus(), 0);
       return;
     }
-    if (item === 'leaderboard') {
+    if (action === 'practice') {
+      useAppStore.setState({ phase: 'matching' });
+      socket.send(MsgType.PracticeMatch);
+      return;
+    }
+    if (action === 'leaderboard') {
       setLobbyPanel('leaderboard');
       socket.send(MsgType.GetLeaderboard, { type: 'total', offset: 0, limit: 30 });
       return;
     }
-    if (item === 'stats') {
+    if (action === 'stats') {
       setLobbyPanel('stats');
       socket.send(MsgType.GetStats);
       return;
     }
-    if (item === 'rules') {
-      setLobbyPanel('chat');
-      return;
+    if (action === 'rules') {
+      setLobbyPanel('rules');
     }
   }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+
+      if (isTyping) {
+        if (event.key === 'Escape') target?.blur();
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSelectedIndex((index) => (index + MENU_ITEMS.length - 1) % MENU_ITEMS.length);
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSelectedIndex((index) => (index + 1) % MENU_ITEMS.length);
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        choose(MENU_ITEMS[selectedIndex].action);
+        return;
+      }
+
+      const numericIndex = Number(event.key) - 1;
+      if (Number.isInteger(numericIndex) && numericIndex >= 0 && numericIndex < MENU_ITEMS.length) {
+        event.preventDefault();
+        setSelectedIndex(numericIndex);
+        choose(MENU_ITEMS[numericIndex].action);
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedIndex, socket, setLobbyPanel]);
 
   return (
     <main className="lobby-screen terminal-screen lobby-terminal-screen">
       <section className="lobby-shell">
         <header className="lobby-terminal-intro">
           <p className="lobby-terminal-brand">🎮 欢乐斗地主</p>
-          <h1>欢迎，{playerName || '玩家'}！</h1>
+          <h1>欢迎，{currentName}！</h1>
           <p className="lobby-terminal-online">🌐 在线玩家：{onlineCount || 0} 人</p>
         </header>
 
@@ -76,14 +131,17 @@ function LobbyTerminal({ socket }: LobbyProps) {
             <h2>请选择：</h2>
             <div className="lobby-menu-list">
               {MENU_ITEMS.map((item, index) => {
-                const selected = (index <= 2 && panel === 'home') || (item.key !== 'home' && item.key !== 'rules' && panel === item.key);
+                const selected = selectedIndex === index;
                 return (
                   <button
-                    key={`${item.label}_${index}`}
-                    className={`lobby-menu-item ${selected && index === 0 ? 'is-primary' : ''}`}
-                    onClick={() => choose(item.key, index)}
+                    key={item.action}
+                    className={`lobby-menu-item ${selected ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setSelectedIndex(index);
+                      choose(item.action);
+                    }}
                   >
-                    <span className="lobby-menu-caret">{selected && index === 0 ? '▶' : ' '}</span>
+                    <span className="lobby-menu-caret">{selected ? '▶' : ' '}</span>
                     <span>{item.label}</span>
                   </button>
                 );
@@ -94,14 +152,16 @@ function LobbyTerminal({ socket }: LobbyProps) {
           <section className="lobby-content-panel">
             {panel === 'leaderboard' ? <LeaderboardPanel /> : null}
             {panel === 'stats' ? <StatsPanel /> : null}
+            {panel === 'rules' ? <RulesPanel /> : null}
             {panel === 'chat' ? <LobbyChat socket={socket} /> : null}
             {panel === 'home' ? <LobbyHome socket={socket} /> : null}
+            <NicknamePanel socket={socket} currentName={currentName} />
           </section>
         </section>
 
         <footer className="lobby-terminal-footer">
-          <p>&gt; ↑↓ 选择 | 回车确认 | 或输入房间号</p>
-          <p className="lobby-terminal-credit">Made with ♥ by Palemoky</p>
+          <p>&gt; ↑↓ 选择 | 回车确认 | 数字 1-7 直达 | Esc 离开输入框</p>
+          <p className="lobby-terminal-credit">Made with ♡ by Palemoky</p>
         </footer>
       </section>
     </main>
@@ -144,15 +204,16 @@ function LobbyHome({ socket }: LobbyProps) {
         {!messages.filter((message) => message.scope !== 'room').length ? (
           <>
             <p>[08:37] 系统：欢迎来到大厅</p>
-            <p>[08:37] 系统：左侧可快速匹配、建房、查看战绩</p>
+            <p>[08:37] 系统：左侧可快速匹配、建房、加入人机练习</p>
             <p>[08:37] 系统：输入房间号后可直接加入好友房</p>
           </>
         ) : null}
       </div>
       <div className="lobby-inline-entry">
         <span>&gt;</span>
-        <button className="terminal-inline-button" onClick={joinRoom}>按</button>
+        <button className="terminal-inline-button" onClick={joinRoom}>加</button>
         <input
+          data-room-code-input="true"
           value={roomCodeInput}
           onChange={(event) => setRoomCodeInput(event.target.value)}
           maxLength={8}
@@ -174,6 +235,56 @@ function LobbyHome({ socket }: LobbyProps) {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function NicknamePanel({ socket, currentName }: LobbyProps & { currentName: string }) {
+  const connected = useAppStore((state) => state.connected);
+  const [nameInput, setNameInput] = useState(currentName === '玩家' ? '' : currentName);
+  const [savedText, setSavedText] = useState('');
+
+  useEffect(() => {
+    setNameInput(currentName === '玩家' ? '' : currentName);
+  }, [currentName]);
+
+  const helperText = useMemo(() => {
+    if (savedText) return savedText;
+    return connected ? '保存后会用新名字重新连接' : '连接后会使用这个名字';
+  }, [connected, savedText]);
+
+  function saveName() {
+    const nextName = sanitizePlayerName(nameInput);
+    if (!nextName) {
+      setSavedText('名字不能为空');
+      return;
+    }
+    localStorage.setItem(PLAYER_NAME_STORAGE_KEY, nextName);
+    setNameInput(nextName);
+    setSavedText('已保存，正在切换身份...');
+    if (connected) {
+      socket.reconnectFresh();
+    } else {
+      useAppStore.setState({ playerName: nextName });
+    }
+  }
+
+  return (
+    <div className="nickname-panel">
+      <div className="lobby-inline-entry lobby-inline-entry--name">
+        <span>&gt;</span>
+        <button className="terminal-inline-button" onClick={saveName}>名</button>
+        <input
+          value={nameInput}
+          onChange={(event) => setNameInput(event.target.value)}
+          maxLength={16}
+          placeholder="输入你的名字"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') saveName();
+          }}
+        />
+      </div>
+      <p>{helperText}</p>
     </div>
   );
 }
@@ -206,7 +317,7 @@ function LobbyChat({ socket }: LobbyProps) {
         <input
           value={chatInput}
           onChange={(event) => setChatInput(event.target.value)}
-          placeholder="键聊天..."
+          placeholder="键入聊天..."
           onKeyDown={(event) => {
             if (event.key === 'Enter') send();
           }}
@@ -244,10 +355,24 @@ function StatsPanel() {
             <p>胜局：{stats.wins}</p>
             <p>胜率：{stats.win_rate.toFixed(1)}%</p>
             <p>积分：{stats.score}</p>
-            <p>排名：#{stats.rank || '-'}</p>
+            <p>排名：{stats.rank || '-'}</p>
             <p>最高连胜：{stats.max_win_streak}</p>
           </>
         ) : <p>点一次“我的战绩”后这里会显示数据。</p>}
+      </div>
+    </div>
+  );
+}
+
+function RulesPanel() {
+  return (
+    <div className="terminal-info-block">
+      <div className="lobby-panel-title">📖 游戏规则</div>
+      <div className="terminal-list-block">
+        <p>三人斗地主，一名地主对两名农民。</p>
+        <p>叫地主阶段可叫/抢/不叫；地主拿三张底牌。</p>
+        <p>出牌需按牌型压过上一手，不能出可选择不出。</p>
+        <p>地主先出完则地主胜，任一农民先出完则农民胜。</p>
       </div>
     </div>
   );
@@ -259,7 +384,7 @@ function MatchingPanel() {
       <section className="terminal-wait-panel">
         <span className="spinner spinner--large" />
         <h2>正在寻找牌友</h2>
-        <p>系统正在匹配在线玩家，请稍候...</p>
+        <p>系统正在匹配玩家或准备人机牌局，请稍等...</p>
       </section>
     </main>
   );
@@ -305,6 +430,14 @@ function RoomWaiting({
       </section>
     </main>
   );
+}
+
+function getStoredPlayerName(): string {
+  return localStorage.getItem(PLAYER_NAME_STORAGE_KEY)?.trim() || '';
+}
+
+function sanitizePlayerName(name: string): string {
+  return [...name.trim()].filter((char) => !/[\u0000-\u001f\u007f]/.test(char)).slice(0, 16).join('').trim();
 }
 
 function clockText(time?: number): string {

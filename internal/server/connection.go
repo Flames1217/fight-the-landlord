@@ -63,6 +63,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// 创建客户端
 	client := NewClient(s, conn)
+	if preferredName := NormalizeNickname(r.URL.Query().Get("name")); preferredName != "" {
+		client.Name = preferredName
+	}
 	client.IP = clientIP // 记录客户端 IP
 	s.registerClient(client)
 

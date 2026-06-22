@@ -3,8 +3,10 @@ package server
 import (
 	"log"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -42,6 +44,27 @@ func GenerateNickname() string {
 	adj := adjectives[rand.IntN(len(adjectives))]
 	noun := nouns[rand.IntN(len(nouns))]
 	return adj + noun
+}
+
+// NormalizeNickname cleans a user-provided nickname for display and storage.
+func NormalizeNickname(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	runes := make([]rune, 0, len([]rune(name)))
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			continue
+		}
+		runes = append(runes, r)
+	}
+	if len(runes) > 16 {
+		runes = runes[:16]
+	}
+
+	return strings.TrimSpace(string(runes))
 }
 
 // Client 代表一个连接的玩家
