@@ -165,6 +165,7 @@ func (s *Server) Start() error {
 	http.HandleFunc("/ws", s.handleWebSocket)
 	http.HandleFunc("/health", s.handleHealth)
 	http.HandleFunc("/version", s.handleVersion)
+	http.Handle("/", spaHandler("/app/web"))
 
 	// 启动监控 goroutine
 	go s.monitorStats()
